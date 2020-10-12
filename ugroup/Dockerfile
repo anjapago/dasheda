@@ -5,7 +5,7 @@ RUN apt-get install -y build-essential python3.6 python3-pip python3-dev
 RUN pip3 -q install pip --upgrade
 
 RUN mkdir src
-WORKDIR src/
+WORKDIR /src/
 COPY . .
 COPY requirements.txt .
 
