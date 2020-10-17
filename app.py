@@ -69,15 +69,16 @@ app.layout = html.Div(
                                               style={"display": "block", "margin-left": "auto", "margin-right": "auto",
                                                      "width": "70%"},
                                               className="six columns")], className="row"),
-        html.Div([html.Span("Country to display : ", className="six columns",
+        html.Div([html.Span("Dates Range : ", className="six columns",
                                            style={"text-align": "right", "width": "40%", "padding-top": 10}),
-                                 dcc.Dropdown(id="country-selected", value='Confirmed',
-                                              options=countries,
-                                              style={"display": "block", "margin-left": "auto", "margin-right": "auto",
-                                                     "width": "70%"},
-                                              className="six columns")], className="row"),
+                                 dcc.Input(id="start-date",value="2019-12-15", type='text'),
+                                 dcc.Input(id="end-date",value="2020-01-01", type='text')
+                                 ], className="row"),
+        html.Br(),
+        html.Br(),
+        html.Div(id='my-output'),
         dcc.Graph(id="my-graph"),
-        dcc.Graph(id="country-graph"),
+        dcc.Graph(id="earthquake-graph"),
     ]
 )
 
@@ -122,22 +123,33 @@ def update_figure(selected):
 
 earthquakeData = pd.read_csv("http://ftp.maps.canada.ca/pub/nrcan_rncan/Earthquakes_Tremblement-de-terre/canadian-earthquakes_tremblements-de-terre-canadien/eqarchive-en.csv",
                    dtype={"latitude": float, "longitude": float})
-earthquakeData = earthquakeData.where(earthquakeData['date'] >= '2019-01-01').dropna(subset=['date'])
+earthquakeData = earthquakeData.dropna(subset=['date'])
+earthquakeData = earthquakeData.where(earthquakeData['date'] >= "2019-01-01")
 
 @app.callback(
-    dash.dependencies.Output("country-graph", "figure"),
-    [dash.dependencies.Input("country-selected", "value")]
+    dash.dependencies.Output(component_id='my-output', component_property='children'),
+    [dash.dependencies.Input(component_id='start-date', component_property='value'), dash.dependencies.Input(component_id='end-date', component_property='value')]
 )
-def update_country(selected):
+def update_output_div(start_date, end_date):
+    return 'Output: {} {}'.format(start_date, end_date)
+
+@app.callback(
+    dash.dependencies.Output("earthquake-graph", "figure"),
+    [dash.dependencies.Input(component_id='start-date', component_property='value'), dash.dependencies.Input(component_id='end-date', component_property='value')]
+)
+def update_country(start_date, end_date):
+
+    data = earthquakeData.where(earthquakeData['date'] >= start_date)
+    data = data.where(earthquakeData['date'] < end_date)
 
     fig = go.Figure()
 
     fig.add_trace(go.Scattergeo(
         locationmode = 'USA-states',
-        lon = earthquakeData['longitude'],
-        lat = earthquakeData['latitude'],
+        lon = data['longitude'],
+        lat = data['latitude'],
         hoverinfo = 'text',
-        text = earthquakeData['place'],
+        text = data['place'],
         mode = 'markers',
         marker = dict(
             size = 2,
