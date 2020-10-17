@@ -120,9 +120,9 @@ def update_figure(selected):
             "layout": go.Layout(height=800,geo={'showframe': False,'showcoastlines': False,
                                                                       'projection': {'type': "miller"}})}
 
-df = pd.read_csv("http://ftp.maps.canada.ca/pub/nrcan_rncan/Earthquakes_Tremblement-de-terre/canadian-earthquakes_tremblements-de-terre-canadien/eqarchive-en.csv",
+earthquakeData = pd.read_csv("http://ftp.maps.canada.ca/pub/nrcan_rncan/Earthquakes_Tremblement-de-terre/canadian-earthquakes_tremblements-de-terre-canadien/eqarchive-en.csv",
                    dtype={"latitude": float, "longitude": float})
-df = df.where(df['date'] >= '2019-01-01').dropna(subset=['date'])
+earthquakeData = earthquakeData.where(earthquakeData['date'] >= '2019-01-01').dropna(subset=['date'])
 
 @app.callback(
     dash.dependencies.Output("country-graph", "figure"),
