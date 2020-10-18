@@ -12,8 +12,8 @@ where minikube can find them.
 - ```eval $(minikube docker-env)```
 
 To run the app with docker.
-- ```docker build -t michael/dash-test:0.1.0 .```
-- ```docker run -p 8050:8050 --name dash_test michael/dash-test:0.1.0```
+- ```docker build -t earthquakes/dash-app:0.1.0 .```
+- ```docker run -p 8050:8050 --name earthquakes_app earthquakes/dash-app:0.1.0```
 
 To check the available images in docker.
 - ```docker images```
@@ -22,14 +22,14 @@ To check the available containers in docker.
 - ```docker container ls```
 
 To stop the app with docker.
-- ```docker container stop dash_test```
+- ```docker container stop earthquakes_app```
 
 To remove the app with docker.
-- ```docker container rm dash_test```
+- ```docker container rm earthquakes_app```
 
 Run the following to run the docker image with minikube.
 - ```minikube start --driver=hyperv```
-- ```helm install dash-release ./helm-chart/dash-test/```
+- ```helm install earthquakes-release ./helm-chart/earthquakes-app/```
  
 Then retrieve the ip address and port number for accessing the app. It is in the URL column.
 - ```minikube service list``` 
@@ -37,7 +37,7 @@ Then retrieve the ip address and port number for accessing the app. It is in the
 Enter the URL in your browser and you will see the app.
 
 To stop the pod, run.
-- ```helm delete dash-release1```
+- ```helm delete earthquakes-release1```
 
 To check active pods.
 - ```kubectl get pods```

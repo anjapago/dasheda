@@ -4,12 +4,12 @@
 replicaCount: 1
 
 image:
-  repository: michael/dash-test 
+  repository: earthquakes/dash-app
   tag: 0.1.0
   pullPolicy: Never
 
 service:
-  name: dash-test
+  name: earthquakes-app
   type: NodePort
   externalPort: 8050
   internalPort: 8050

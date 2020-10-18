@@ -1,4 +1,4 @@
 apiVersion: v1
 description: A Helm chart for Kubernetes
-name: dash-test
+name: earthquakes-app
 version: 0.1.0
