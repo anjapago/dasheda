@@ -5,15 +5,17 @@
 import dash
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_table
 import flask
 import plotly.graph_objs as go
 import plotly.express as px
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-                   
-from urllib.request import urlopen
-import json
+import math
+
+from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 
@@ -29,6 +31,13 @@ code_df = pd.read_csv('https://raw.githubusercontent.com/plotly/datasets/master/
 
 for country in code_df['CODE']:
     countries.append({ 'label': country.lower(), 'value': country.lower()})
+
+
+earthquakeData = pd.read_csv("http://ftp.maps.canada.ca/pub/nrcan_rncan/Earthquakes_Tremblement-de-terre/canadian-earthquakes_tremblements-de-terre-canadien/eqarchive-en.csv",
+                   dtype={"latitude": float, "longitude": float})
+earthquakeData = earthquakeData[~earthquakeData['date'].isnull()]
+earthquakeData = earthquakeData[earthquakeData['date'] >= "2019-01-01"]
+earthquakeData['distance'] = 0
 
 app.layout = html.Div(
     style={'backgroundColor': colors['background']},
@@ -47,18 +56,6 @@ app.layout = html.Div(
             Dash: A web application framework for Python.
         '''),
 
-        # dcc.Graph(
-        #     id='example-graph',
-        #     figure={
-        #         'data': [
-        #             {'x': [1, 2, 3], 'y': [4, 1, 2], 'type': 'bar', 'name': 'SF'},
-        #             {'x': [1, 2, 3], 'y': [2, 4, 5], 'type': 'bar', 'name': u'Montréal'},
-        #         ],
-        #         'layout': {
-        #             'title': 'Dash Data Visualization'
-        #         }
-        #     }
-        # )
         html.Div([html.Span("Metric to display : ", className="six columns",
                                            style={"text-align": "right", "width": "40%", "padding-top": 10}),
                                  dcc.Dropdown(id="value-selected", value='Confirmed',
@@ -74,11 +71,26 @@ app.layout = html.Div(
                                  dcc.Input(id="start-date",value="2019-12-15", type='text'),
                                  dcc.Input(id="end-date",value="2020-01-01", type='text')
                                  ], className="row"),
-        html.Br(),
-        html.Br(),
-        html.Div(id='my-output'),
-        dcc.Graph(id="my-graph"),
+        html.Div([html.Span("Location: ", className="six columns",
+                                           style={"text-align": "right", "width": "40%", "padding-top": 10}),
+                 dcc.Input(id="location",value="Edmonton, AB, Canada", type='text')
+                 ], className="row"),
+        html.Div([html.Span("Count: ", className="six columns",
+                                           style={"text-align": "right", "width": "40%", "padding-top": 10}),
+                  dcc.Input(id="count",value="0", type='number')
+                  ], className="row"),
+                  
+        html.Div(id='latlong-output'),
+        
+        dash_table.DataTable(
+            id='table',
+            columns=[{"name": i, "id": i} for i in earthquakeData.columns],
+            data = earthquakeData.head(n = 0).to_dict('records'),
+        ),
+
         dcc.Graph(id="earthquake-graph"),
+        
+        dcc.Graph(id="my-graph"),
     ]
 )
 
@@ -121,17 +133,43 @@ def update_figure(selected):
             "layout": go.Layout(height=800,geo={'showframe': False,'showcoastlines': False,
                                                                       'projection': {'type': "miller"}})}
 
-earthquakeData = pd.read_csv("http://ftp.maps.canada.ca/pub/nrcan_rncan/Earthquakes_Tremblement-de-terre/canadian-earthquakes_tremblements-de-terre-canadien/eqarchive-en.csv",
-                   dtype={"latitude": float, "longitude": float})
-earthquakeData = earthquakeData.dropna(subset=['date'])
-earthquakeData = earthquakeData.where(earthquakeData['date'] >= "2019-01-01")
+geolocator = Nominatim(scheme='http')
 
 @app.callback(
-    dash.dependencies.Output(component_id='my-output', component_property='children'),
-    [dash.dependencies.Input(component_id='start-date', component_property='value'), dash.dependencies.Input(component_id='end-date', component_property='value')]
+    dash.dependencies.Output(component_id='latlong-output', component_property='children'),
+    [dash.dependencies.Input(component_id='location', component_property='n_submit')]
 )
-def update_output_div(start_date, end_date):
-    return 'Output: {} {}'.format(start_date, end_date)
+def update_lat_long(location):
+    loc = geolocator.geocode(location)
+    latitude = loc.latitude
+    longitude = loc.longitude
+    return '{} {}'.format(latitude, longitude)
+
+@app.callback(
+    dash.dependencies.Output("table", "data"),
+    [dash.dependencies.Input(component_id='start-date', component_property='value'), 
+     dash.dependencies.Input(component_id='end-date', component_property='value'),
+     dash.dependencies.Input(component_id='location', component_property='n_submit'),
+     dash.dependencies.Input(component_id='count', component_property='value')]
+)
+def update_table(start_date, end_date, location, count):
+
+    loc = geolocator.geocode(location)
+    latitude = loc.latitude
+    longitude = loc.longitude
+
+    count = int(count)
+    if count > 20:
+        count = 20
+    
+    data = earthquakeData[earthquakeData['date'] >= start_date]
+    data = data[earthquakeData['date'] < end_date]
+    
+    dist_func = lambda x : geodesic((x[0], x[1]) ,(latitude, longitude)).kilometers
+
+    data['distance'] = data[['atitude', 'longitude']].apply(dist_func, axis=1) # (((data['latitude'] - latitude) ** 2) + ((data['longitude'] - longitude) ** 2)).apply(math.sqrt)
+    data.sort_values("distance", inplace = True, ascending = False)
+    return data.head(10).to_dict('records')
 
 @app.callback(
     dash.dependencies.Output("earthquake-graph", "figure"),
@@ -139,8 +177,8 @@ def update_output_div(start_date, end_date):
 )
 def update_country(start_date, end_date):
 
-    data = earthquakeData.where(earthquakeData['date'] >= start_date)
-    data = data.where(earthquakeData['date'] < end_date)
+    data = earthquakeData[earthquakeData['date'] >= start_date]
+    data = data[earthquakeData['date'] < end_date]
 
     fig = go.Figure()
 
