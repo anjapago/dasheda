@@ -44,7 +44,7 @@ app.layout = html.Div(
     className="container",
     children=[
         html.H1(
-            children='Hello Dash',
+            children='EarthQuakes',
             style={
                 'textAlign': 'center',
                 'color': colors['text'],
@@ -53,35 +53,57 @@ app.layout = html.Div(
         ),
 
         html.Div(children='''
-            Dash: A web application framework for Python.
-        '''),
+            Dash: An App For Assessing Your Risk Of Earthquakes.
+        ''',
+            style={
+                'textAlign': 'center',
+                'color': colors['text'],
+                'padding-bottom': '30'
+            }),
 
-        html.Div([html.Span("Metric to display : ", className="six columns",
-                                           style={"text-align": "right", "width": "40%", "padding-top": 10}),
-                                 dcc.Dropdown(id="value-selected", value='Confirmed',
-                                              options=[{'label': "Confirmed ", 'value': 'Confirmed'},
-                                                       {'label': "Recovered ", 'value': 'Recovered'},
-                                                       {'label': "Deaths ", 'value': 'Deaths'},
-                                                       {'label': "Active ", 'value': 'Active'}],
-                                              style={"display": "block", "margin-left": "auto", "margin-right": "auto",
-                                                     "width": "70%"},
-                                              className="six columns")], className="row"),
-        html.Div([html.Span("Dates Range : ", className="six columns",
-                                           style={"text-align": "right", "width": "40%", "padding-top": 10}),
-                                 dcc.Input(id="start-date",value="2019-12-15", type='text'),
-                                 dcc.Input(id="end-date",value="2020-01-01", type='text')
-                                 ], className="row"),
+        html.Div(children="Dates Range 2019 : ", style={"textAlign": "center", "padding-top": 10}),
+                                 
+
+        dcc.RangeSlider(
+                id='my-range-slider',
+                min=1,
+                max=12,
+                value=[1, 12],
+                step=None,
+                marks={
+                    1: {'label': 'Jan'},
+                    2: {'label': 'Feb'},
+                    3: {'label': 'Mar'},
+                    4: {'label': 'Apr'},
+                    5: {'label': 'May'},
+                    6: {'label': 'Jun'},
+                    7: {'label': 'Jul'},
+                    8: {'label': 'Aug'},
+                    9: {'label': 'Sep'},
+                    10: {'label': 'Oct'},
+                    11: {'label': 'Nov'},
+                    12: {'label': 'Dec'},
+                },
+                included=False
+            ),
+
         html.Div([html.Span("Location: ", className="six columns",
                                            style={"text-align": "right", "width": "40%", "padding-top": 10}),
-                 dcc.Input(id="location",value="Edmonton, AB, Canada", type='text')
+                 dcc.Input(id="location",value="Edmonton, AB, Canada", type='text', debounce=True)
                  ], className="row"),
+        html.Div([html.Span("Latitude: ", className="six columns",
+                                           style={"text-align": "right", "width": "40%", "padding-top": 10}),
+                  dcc.Input(id="latitude",value="0", type='number')
+                  ], className="row"),
+        html.Div([html.Span("Longitude: ", className="six columns",
+                                           style={"text-align": "right", "width": "40%", "padding-top": 10}),
+                  dcc.Input(id="longitude",value="0", type='number')
+                  ], className="row"),
         html.Div([html.Span("Count: ", className="six columns",
                                            style={"text-align": "right", "width": "40%", "padding-top": 10}),
-                  dcc.Input(id="count",value="0", type='number')
+                  dcc.Input(id="count",value="10", type='number')
                   ], className="row"),
-                  
-        html.Div(id='latlong-output'),
-        
+
         dash_table.DataTable(
             id='table',
             columns=[{"name": i, "id": i} for i in earthquakeData.columns],
@@ -89,93 +111,74 @@ app.layout = html.Div(
         ),
 
         dcc.Graph(id="earthquake-graph"),
-        
-        dcc.Graph(id="my-graph"),
     ]
 )
 
-def prepare_daily_report():
-    current_date = (datetime.today() - timedelta(days=1)).strftime('%m-%d-%Y')
-    df = pd.read_csv('https://raw.githubusercontent.com/CSSEGISandData/COVID-19/master/csse_covid_19_data/csse_covid_19_daily_reports/' + current_date + '.csv')
+geolocator = Nominatim(scheme='http', user_agent="android_application")
 
-    df_country = df.groupby(['Country_Region']).sum().reset_index()
-    df_country.replace('US', 'United States', inplace=True)
-    df_country.replace(0, 1, inplace=True)
+location_dict = {}
 
-    code_df = pd.read_csv('https://raw.githubusercontent.com/plotly/datasets/master/2014_world_gdp_with_codes.csv')
-    df_country_code = df_country.merge(code_df, left_on='Country_Region', right_on='COUNTRY', how='left')
+# We have been having trouble with the geolocator library
+# It works in a jupyter notebook but only sometimes works in this image
+# To make the demo work, we have circumvented the library temporarily
+backup_dict = { "Edmonton, AB, Canada": (53.535411, -113.507996) }
 
-    df_country_code.loc[df_country_code.Country_Region == 'Congo (Kinshasa)', 'CODE'] = 'COD'
-    df_country_code.loc[df_country_code.Country_Region == 'Congo (Brazzaville)', 'CODE'] = 'COG'
-    
-    return(df_country_code)
+def get_location(location):
+    if not location in location_dict:
+        try:
+            loc = geolocator.geocode(location)
+            location_dict[location] = (loc.latitude, loc.longitude)
+        except:
+            try:
+                location_dict[location] = backup_dict[location]
+            except:
+                location_dict[location] = (53.535411, -113.507996)
 
-@app.callback(
-    dash.dependencies.Output("my-graph", "figure"),
-    [dash.dependencies.Input("value-selected", "value")]
-)
-def update_figure(selected):
-    dff = prepare_daily_report()
-    dff['hover_text'] = dff["Country_Region"] + ": " + dff[selected].apply(str)
-
-    trace = go.Choropleth(locations=dff['CODE'],z=np.log(dff[selected]),
-                          text=dff['hover_text'],
-                          hoverinfo="text",
-                          marker_line_color='white',
-                          autocolorscale=False,
-                          reversescale=True,
-                          colorscale="RdBu",marker={'line': {'color': 'rgb(180,180,180)','width': 0.5}},
-                          colorbar={"thickness": 10,"len": 0.3,"x": 0.9,"y": 0.7,
-                                    'title': {"text": 'persons', "side": "bottom"},
-                                    'tickvals': [ 2, 10],
-                                    'ticktext': ['100', '100,000']})   
-    return {"data": [trace],
-            "layout": go.Layout(height=800,geo={'showframe': False,'showcoastlines': False,
-                                                                      'projection': {'type': "miller"}})}
-
-geolocator = Nominatim(scheme='http')
+    return location_dict[location]
 
 @app.callback(
-    dash.dependencies.Output(component_id='latlong-output', component_property='children'),
-    [dash.dependencies.Input(component_id='location', component_property='n_submit')]
+    [dash.dependencies.Output(component_id='latitude', component_property='value'),
+     dash.dependencies.Output(component_id='longitude', component_property='value')],
+    [dash.dependencies.Input(component_id='location', component_property='value')]
 )
 def update_lat_long(location):
-    loc = geolocator.geocode(location)
-    latitude = loc.latitude
-    longitude = loc.longitude
-    return '{} {}'.format(latitude, longitude)
+    latitude, longitude = get_location(location)
+    return (latitude, longitude)
 
 @app.callback(
     dash.dependencies.Output("table", "data"),
-    [dash.dependencies.Input(component_id='start-date', component_property='value'), 
-     dash.dependencies.Input(component_id='end-date', component_property='value'),
-     dash.dependencies.Input(component_id='location', component_property='n_submit'),
+    [dash.dependencies.Input(component_id='my-range-slider', component_property='value'),
+     dash.dependencies.Input(component_id='latitude', component_property='value'),
+     dash.dependencies.Input(component_id='longitude', component_property='value'),
      dash.dependencies.Input(component_id='count', component_property='value')]
 )
-def update_table(start_date, end_date, location, count):
+def update_table(rng, latitude, longitude, count):
 
-    loc = geolocator.geocode(location)
-    latitude = loc.latitude
-    longitude = loc.longitude
+    start_date, end_date = range_to_dates(rng)
+
+    latitude = float(latitude)
+    longitude = float(longitude)
 
     count = int(count)
     if count > 20:
         count = 20
     
     data = earthquakeData[earthquakeData['date'] >= start_date]
-    data = data[earthquakeData['date'] < end_date]
+    data = data[earthquakeData['date'] <= end_date]
     
     dist_func = lambda x : geodesic((x[0], x[1]) ,(latitude, longitude)).kilometers
 
-    data['distance'] = data[['atitude', 'longitude']].apply(dist_func, axis=1) # (((data['latitude'] - latitude) ** 2) + ((data['longitude'] - longitude) ** 2)).apply(math.sqrt)
-    data.sort_values("distance", inplace = True, ascending = False)
-    return data.head(10).to_dict('records')
+    data['distance'] = data[['latitude', 'longitude']].apply(dist_func, axis=1) # (((data['latitude'] - latitude) ** 2) + ((data['longitude'] - longitude) ** 2)).apply(math.sqrt)
+    data.sort_values("distance", inplace = True)
+    return data.head(count).to_dict('records')
 
 @app.callback(
     dash.dependencies.Output("earthquake-graph", "figure"),
-    [dash.dependencies.Input(component_id='start-date', component_property='value'), dash.dependencies.Input(component_id='end-date', component_property='value')]
+    [dash.dependencies.Input(component_id='my-range-slider', component_property='value')]
 )
-def update_country(start_date, end_date):
+def update_map(rng):
+
+    start_date, end_date = range_to_dates(rng)
 
     data = earthquakeData[earthquakeData['date'] >= start_date]
     data = data[earthquakeData['date'] < end_date]
@@ -198,9 +201,20 @@ def update_country(start_date, end_date):
             )
         )))
     
-    return fig  #{"data": [trace],
-                #"layout": go.Layout(height=800,geo={'showframe': False,'showcoastlines': False,
-                #                                                          'projection': {'type': "miller"}})}
+    return fig
+
+def range_to_dates(rng):
+    if rng[0] < 10:
+        rng[0] = "0" + str(rng[0])
+    else:
+        rng[0] = str(rng[0])
+
+    if rng[1] < 10:
+        rng[1] = "0" + str(rng[1])
+    else:
+        rng[1] = str(rng[1])
+
+    return ('2019-{}-01'.format(rng[0]), '2019-{}-01'.format(rng[1]))
 
 if __name__ == '__main__':
     app.run_server(host='0.0.0.0', port=8050)
